@@ -2002,6 +2002,7 @@ return {
 			masq_allow_invalid: [ "bool" ],
 			masq_src: [ "network", null, PARSE_LIST ],
 			masq_dest: [ "network", null, PARSE_LIST ],
+			masq_local: [ "bool", "1" ],
 
 			masq6: [ "bool" ],
 

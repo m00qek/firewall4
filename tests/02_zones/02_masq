@@ -29,6 +29,10 @@ Testing that zone masquerading is properly mapped to chains.
 0x1103
 -- End --
 
+-- File fs/open~_sys_class_net_zone4_flags.txt --
+0x1103
+-- End --
+
 -- File uci/firewall.json --
 {
 	"zone": [
@@ -59,6 +63,16 @@ Testing that zone masquerading is properly mapped to chains.
 			"device": "zone3",
 			"masq": "1",
 			"masq6": "1"
+		},
+		{
+			".description": "Setting masq_local to false should emit 'iif != 0' before the masquerade action",
+			"name": "test4",
+			"input": "ACCEPT",
+			"output": "ACCEPT",
+			"forward": "ACCEPT",
+			"device": "zone4",
+			"masq": "1",
+			"masq_local": "0"
 		}
 	]
 }
@@ -82,6 +96,9 @@ table inet fw4 {
 	define test3_devices = { "zone3" }
 	define test3_subnets = {  }
 
+	define test4_devices = { "zone4" }
+	define test4_subnets = {  }
+
 
 	#
 	# User includes
@@ -103,6 +120,7 @@ table inet fw4 {
 		iifname "zone1" jump input_test1 comment "!fw4: Handle test1 IPv4/IPv6 input traffic"
 		iifname "zone2" jump input_test2 comment "!fw4: Handle test2 IPv4/IPv6 input traffic"
 		iifname "zone3" jump input_test3 comment "!fw4: Handle test3 IPv4/IPv6 input traffic"
+		iifname "zone4" jump input_test4 comment "!fw4: Handle test4 IPv4/IPv6 input traffic"
 	}
 
 	chain forward {
@@ -112,6 +130,7 @@ table inet fw4 {
 		iifname "zone1" jump forward_test1 comment "!fw4: Handle test1 IPv4/IPv6 forward traffic"
 		iifname "zone2" jump forward_test2 comment "!fw4: Handle test2 IPv4/IPv6 forward traffic"
 		iifname "zone3" jump forward_test3 comment "!fw4: Handle test3 IPv4/IPv6 forward traffic"
+		iifname "zone4" jump forward_test4 comment "!fw4: Handle test4 IPv4/IPv6 forward traffic"
 	}
 
 	chain output {
@@ -123,6 +142,7 @@ table inet fw4 {
 		oifname "zone1" jump output_test1 comment "!fw4: Handle test1 IPv4/IPv6 output traffic"
 		oifname "zone2" jump output_test2 comment "!fw4: Handle test2 IPv4/IPv6 output traffic"
 		oifname "zone3" jump output_test3 comment "!fw4: Handle test3 IPv4/IPv6 output traffic"
+		oifname "zone4" jump output_test4 comment "!fw4: Handle test4 IPv4/IPv6 output traffic"
 	}
 
 	chain prerouting {
@@ -195,6 +215,27 @@ table inet fw4 {
 		oifname "zone3" counter jump handle_reject comment "!fw4: reject test3 IPv4/IPv6 traffic"
 	}
 
+	chain input_test4 {
+		jump accept_from_test4
+	}
+
+	chain output_test4 {
+		jump accept_to_test4
+	}
+
+	chain forward_test4 {
+		jump accept_to_test4
+	}
+
+	chain accept_from_test4 {
+		iifname "zone4" counter accept comment "!fw4: accept test4 IPv4/IPv6 traffic"
+	}
+
+	chain accept_to_test4 {
+		meta nfproto ipv4 oifname "zone4" ct state invalid counter drop comment "!fw4: Prevent NAT leakage"
+		oifname "zone4" counter accept comment "!fw4: accept test4 IPv4/IPv6 traffic"
+	}
+
 
 	#
 	# NAT rules
@@ -209,6 +250,7 @@ table inet fw4 {
 		oifname "zone1" jump srcnat_test1 comment "!fw4: Handle test1 IPv4/IPv6 srcnat traffic"
 		oifname "zone2" jump srcnat_test2 comment "!fw4: Handle test2 IPv4/IPv6 srcnat traffic"
 		oifname "zone3" jump srcnat_test3 comment "!fw4: Handle test3 IPv4/IPv6 srcnat traffic"
+		oifname "zone4" jump srcnat_test4 comment "!fw4: Handle test4 IPv4/IPv6 srcnat traffic"
 	}
 
 	chain srcnat_test1 {
@@ -222,6 +264,10 @@ table inet fw4 {
 	chain srcnat_test3 {
 		meta nfproto ipv4 masquerade comment "!fw4: Masquerade IPv4 test3 traffic"
 		meta nfproto ipv6 masquerade comment "!fw4: Masquerade IPv6 test3 traffic"
+	}
+
+	chain srcnat_test4 {
+		meta nfproto ipv4 iif != 0 masquerade comment "!fw4: Masquerade IPv4 test4 traffic (skip locally-originated)"
 	}
 
 
