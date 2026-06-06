@@ -55,7 +55,7 @@ function reload_sets() {
 function render_ruleset(use_statefile) {
 	fw4.load(use_statefile);
 
-	include("templates/ruleset.uc", { fw4, type, exists, length, include });
+	return render("templates/ruleset.uc", { fw4, type, exists, length, include });
 }
 
 function lookup_network(net) {
@@ -137,10 +137,12 @@ function run_includes() {
 
 switch (getenv("ACTION")) {
 case "start":
-	return render_ruleset(true);
+	print(render_ruleset(true));
+	return;
 
 case "print":
-	return render_ruleset(false);
+	print(render_ruleset(false));
+	return;
 
 case "reload-sets":
 	return reload_sets();
