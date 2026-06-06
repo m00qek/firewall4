@@ -1,13 +1,11 @@
 'use strict';
 
 // nftables include statement placement and include section filtering.
-//
-// Out of scope: ACTION=includes code path (tests/06_includes/03_script_includes).
-// That path reads /var/run/fw4.state and calls system() to execute script-type
-// includes — it requires a real statefile and shell environment that the render
-// harness does not provide.  It is tested by the shell test runner only.
 
 import { describe, it, assert, truthy, contains, not, afterEach, mock } from 'utest';
+
+const _render = render;
+const MAIN_UC = '/app/root/usr/share/firewall4/main.uc';
 
 // ── Global module setup ─────────────────────────────────────────────────────
 
@@ -313,5 +311,59 @@ describe('includes — automatic /usr/share/nftables.d/ scanning', () => {
 		assert.match(truthy(),
 			index(forward, 'include "/usr/share/nftables.d/chain-post/forward/auto.nft"') >
 			index(forward, 'ct state vmap'));
+	});
+});
+
+describe('includes — state file', () => {
+	it('read_state() parses /var/run/fw4.state as JSON', () => {
+		const state = { includes: [{ type: 'script', path: '/etc/firewall.user' }] };
+		mock.global.patch('fs', fs_patch({ '/var/run/fw4.state': sprintf('%J', state) }));
+		assert.match(state, fw4.read_state());
+	});
+});
+
+describe('includes — ACTION=includes', () => {
+	afterEach(() => { mock.global.unpatch('uci'); mock.global.patch('fs', fs_patch()); });
+
+	function run_main(state, system_fn, warn_fn) {
+		mock.global.patch('fs', fs_patch({ '/var/run/fw4.state': sprintf('%J', state) }));
+		const do_run = () =>
+			mock.inject_builtin('system', system_fn, () =>
+				mock.inject_builtin('getenv', (k) => k == 'ACTION' ? 'includes' : null, () =>
+					_render(MAIN_UC, {})
+				)
+			);
+		if (warn_fn)
+			mock.inject_builtin('warn', warn_fn, do_run);
+		else
+			do_run();
+	}
+
+	it('calls system() for each script-type include', () => {
+		const state = { includes: [{ type: 'script', path: '/etc/firewall.user' }] };
+		const calls = [];
+		run_main(state, (cmd) => { push(calls, cmd); return 0; });
+		assert.match(truthy(), length(calls) == 1);
+		assert.match(contains('/etc/firewall.user'), calls[0][2]);
+	});
+
+	it('skips non-script-type includes', () => {
+		const state = { includes: [{ type: 'nftables', path: '/etc/fw.nft' }] };
+		const calls = [];
+		run_main(state, (cmd) => { push(calls, cmd); return 0; });
+		assert.match(truthy(), length(calls) == 0);
+	});
+
+	it('warns when an include script exits with non-zero', () => {
+		const state = { includes: [{ type: 'script', path: '/etc/bad.sh' }] };
+		const warnings = [];
+		run_main(
+			state,
+			(cmd) => 1,
+			(...args) => push(warnings, join('', args))
+		);
+		const w = join('\n', warnings);
+		assert.match(contains('/etc/bad.sh'), w);
+		assert.match(contains('exit code 1'), w);
 	});
 });
