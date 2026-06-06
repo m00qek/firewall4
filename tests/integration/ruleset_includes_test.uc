@@ -160,9 +160,6 @@ describe('includes — firewall.user compatibility', () => {
 
 	it('/etc/firewall.user without fw4_compatible is not rendered and emits a compatibility warning', () => {
 		const warnings = [];
-		const orig_warn = global.warn;
-		global.warn = (...args) => { push(warnings, join('', args)); orig_warn(...args); };
-
 		mock.global.patch('fs', fs_patch({ '/etc/firewall.user': '' }));
 		mock.global.patch('uci', { data: {
 			firewall: {
@@ -171,9 +168,9 @@ describe('includes — firewall.user compatibility', () => {
 			},
 			helpers: {}
 		}});
-		assert.match(not(contains('/etc/firewall.user')), renderWith());
-
-		global.warn = orig_warn;
+		mock.inject_builtin('warn', (...args) => push(warnings, join('', args)), () => {
+			assert.match(not(contains('/etc/firewall.user')), renderWith());
+		});
 		const warning_text = join('\n', warnings);
 		assert.match(contains('not marked as compatible with fw4'), warning_text);
 		assert.match(contains("requires 'option fw4_compatible 1'"), warning_text);
